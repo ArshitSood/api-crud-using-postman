@@ -1,6 +1,5 @@
 const express = require('express');
 const app = express();
-
 const jwt = require('jsonwebtoken');
 require("dotenv").config();
 
@@ -12,7 +11,6 @@ app.set("view engine", "ejs");
 
 app.use(express.static("./public"));
 app.use(express.json());
-
 
 const authenticateJWT = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -33,11 +31,21 @@ const users = [
 ];
 
 let posts = [
-    { id: 1, title: 'Post One' },
-    { id: 2, title: 'Post Two' },
-    { id: 3, title: 'Post Three' },
-    { id: 4, title: 'Post Four' },
+    { id: 1, title: 'Post One', userId: 1 },
+    { id: 2, title: 'Post Two', userId: 1 },
+    { id: 3, title: 'Post Three', userId: 2 },
+    { id: 4, title: 'Post Four', userId: 2 },
 ];
+
+app.post('/signup', (req, res) => {
+    const { username, password } = req.body;
+    if (users.find(u => u.username === username)) {
+        return res.status(400).json({ message: 'Username already exists' });
+    }
+    const newUser = { id: users.length + 1, username, password };
+    users.push(newUser);
+    res.status(201).json({ message: 'User created', user: newUser });
+});
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
@@ -45,45 +53,41 @@ app.post('/login', (req, res) => {
 
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const accessToken = jwt.sign({ username: user.username, id: user.id }, SECRET_KEY, /*{ expiresIn: '10 minutes'}*/);
+    const accessToken = jwt.sign({ username: user.username, id: user.id }, SECRET_KEY, { expiresIn: '2 hours'});
     res.json({ accessToken });
 });
 
-app.get('/protected', authenticateJWT, (req, res) => {
-    res.json( posts.filter(post => post.id ===req.user.id));
+app.get('/myposts', authenticateJWT, (req, res) => {
+    res.json( posts.filter(post => post.userId ===req.user.id));
 });
 
-app.get('/posts', (req, res) => {
+app.get('/posts',authenticateJWT, (req, res) => {
     res.json(posts);
 });
 
-app.get('/posts/:id', (req, res) => {
-    const post = posts.find(p => p.id === parseInt(req.params.id));
-    if (!post) {
-        return res.status(404).json({ message: 'Post not found' });
-    }
-    res.json(post);
-
+app.post('/posts', authenticateJWT, (req, res) => {
+    const { title } = req.body;
+    const newPost = { id: posts.length + 1, title, userId: req.user.id };
+    posts.push(newPost);
+    res.status(201).json({ message: 'Post created', post: newPost });
 });
 
-app.post('/posts', (req, res) => {
-    const { id, title } = req.body;
-    posts.push({ id, title });
-    res.status(201).json({ message: 'Post created', post: { id, title } });
-});
-
-app.put('/posts/:id', (req, res) => {
+app.put('/posts/:id', authenticateJWT, (req, res) => {
     const { title } = req.body;
     let post = posts.find(p => p.id === parseInt(req.params.id));
     if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    if (post.userId !== req.user.id) return res.status(403).json({ message: 'You can only edit your own posts' });
 
     post.title = title;
     return res.json({ message: 'Post updated', post });
 });
 
-app.delete('/posts/:id', (req, res) => {
+app.delete('/posts/:id', authenticateJWT, (req, res) => {
     const postIndex = posts.findIndex(p => p.id === parseInt(req.params.id));
     if (postIndex === -1) return res.status(404).json({ message: 'Post not found' });
+
+    if (posts[postIndex].userId !== req.user.id) return res.status(403).json({ message: 'You can only delete your own posts' });
 
     posts.splice(postIndex, 1);
     res.json({ message: 'Post deleted' });
@@ -96,7 +100,7 @@ app.get('/error', (req, res, next) => {
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(401).send('I dont Know What Heppened LOL');
+    res.status(500).send('I dont Know What Heppened LOL');
 });
 
 app.listen(3000);
