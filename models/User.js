@@ -1,7 +1,11 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    username: {
+    name: {
+        type: String,
+        required: true
+    },
+    email: {
         type: String,
         required: true,
         unique: true
@@ -10,9 +14,21 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    salt:{
-        type:String,
+    mobileNumber:{
+        type: Number,
         required: true
+    },
+    userType:{
+        type: String,
+        enum: ["admin","subAdmin","user"],
+        default: "user"
+    },
+    otp: {
+        type: Number,
+    },
+    isEmailVerified: {
+        type: Boolean,
+        default: false
     }
 }, {timestamps: true});
 
